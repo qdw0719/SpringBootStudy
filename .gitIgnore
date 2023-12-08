@@ -2,4 +2,4 @@ build/
 out/
 .idea/
 .md
-.lock
+.gradle
