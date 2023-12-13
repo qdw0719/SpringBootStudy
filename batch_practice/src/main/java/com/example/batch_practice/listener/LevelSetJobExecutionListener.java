@@ -31,7 +31,7 @@ public class LevelSetJobExecutionListener implements JobExecutionListener {
 
         log.info("==================================================================================================================");
         log.info("금일 처리된 데이터 => {} (건)", items.size());
-        log.info("데이터 처리 시간 => {} (초)", operationTime);
+        log.info("데이터 처리 시간 => {} (ms)", operationTime);
         log.info("==================================================================================================================");
     }
 }

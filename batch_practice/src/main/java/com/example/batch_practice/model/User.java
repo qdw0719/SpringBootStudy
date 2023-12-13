@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import javax.persistence.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
 
 @Data
@@ -25,11 +26,19 @@ public class User {
     @Enumerated(EnumType.STRING)
     private Level level;
 
-    private int totalAmount;
+    @OneToMany(cascade = CascadeType.PERSIST, fetch = FetchType.EAGER)
+    @JoinColumn(name = "user_id")
+    private List<Orders> orders;
 
     private LocalDateTime createdDate;
 
     private LocalDate updatedDate;
+
+    private int getTotalAmount() {
+        return this.orders.stream()
+                .mapToInt(Orders::getAmount)
+                .sum();
+    }
 
     public boolean availableLevelSet() {
         return Level.availableLevelSet(this.getLevel(), this.getTotalAmount());

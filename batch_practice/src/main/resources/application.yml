@@ -2,6 +2,8 @@ server:
   port:8090
 
 spring:
+  jpa:
+    show-sql: true
   batch:
     job.names: ${job.name:NONE}
   datasource:

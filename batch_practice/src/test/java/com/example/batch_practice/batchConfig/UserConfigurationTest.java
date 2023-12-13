@@ -5,6 +5,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.runner.RunWith;
 import org.springframework.batch.core.JobExecution;
+import org.springframework.batch.core.Step;
 import org.springframework.batch.core.StepExecution;
 import org.springframework.batch.test.JobLauncherTestUtils;
 import org.springframework.batch.test.context.SpringBatchTest;
@@ -42,5 +43,15 @@ class UserConfigurationTest {
         .isEqualTo(30);
 
         Assertions.assertThat(userRepository.count()).isEqualTo(40);
+    }
+
+    @Test
+    public void test2() throws Exception {
+        JobExecution jobExecution = jobLauncherTestUtils.launchJob();
+        jobExecution.getStepExecutions().stream()
+                        .filter(stepExecution -> stepExecution.getStepName().equals("orderStatisticsStep"))
+                .forEach(stepExecution -> System.out.println("step execution getJobParameters => " + stepExecution.getJobParameters()));
+
+        assertEquals(true, true);
     }
 }
