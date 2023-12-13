@@ -13,4 +13,6 @@ public class BatchPracticeApplication {
         SpringApplication.run(BatchPracticeApplication.class, args);
     }
 
+    //TODO: 성능개선
+    
 }
