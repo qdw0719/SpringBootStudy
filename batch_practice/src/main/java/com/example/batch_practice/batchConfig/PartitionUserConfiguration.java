@@ -1,5 +1,6 @@
 package com.example.batch_practice.batchConfig;
 
+import com.example.batch_practice.execution.JobParametersDecide;
 import com.example.batch_practice.listener.LevelSetJobExecutionListener;
 import com.example.batch_practice.model.OrderStatistics;
 import com.example.batch_practice.model.User;
@@ -8,6 +9,7 @@ import com.example.batch_practice.repository.UserRepository;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
+import org.springframework.batch.core.configuration.annotation.JobScope;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
@@ -51,8 +53,6 @@ public class PartitionUserConfiguration {
     private final DataSource dataSource;
     private final TaskExecutor taskExecutor;
 
-    private String currentDate = "2023-07";
-
     public PartitionUserConfiguration(JobBuilderFactory jobBuilderFactory,
                                       StepBuilderFactory stepBuilderFactory,
                                       EntityManagerFactory entityManagerFactory,
@@ -71,8 +71,11 @@ public class PartitionUserConfiguration {
                 .incrementer(new RunIdIncrementer())
                 .start(this.userStep())
                 .next(this.userLevelSettingManagerStep())
-                .next(this.orderStatisticsStep())
                 .listener(new LevelSetJobExecutionListener(this.userRepository))
+                .next(new JobParametersDecide("date"))
+                .on(JobParametersDecide.CONTINUE.getName())
+                .to(this.orderStatisticsStep(null))
+                .build()
                 .build();
     }
 
@@ -105,13 +108,12 @@ public class PartitionUserConfiguration {
     }
 
     @Bean(JOB_NAME + "_orderStatisticsStep")
-//    @JobScope
-//    public Step orderStatisticsStep(@Value("#{jobParameters.date}") String date) throws Exception {
-    public Step orderStatisticsStep() throws Exception {
+    @JobScope
+    public Step orderStatisticsStep(@Value("#{jobParameters[date]}") String date) throws Exception {
         return this.stepBuilderFactory.get("orderStatisticsStep")
                 .<OrderStatistics, OrderStatistics>chunk(CHUNK_SIZE)
-                .reader(orderStatisticsItemReader(this.currentDate))
-                .writer(orderStatisticsItemWriter(this.currentDate))
+                .reader(orderStatisticsItemReader(date))
+                .writer(orderStatisticsItemWriter(date))
                 .build();
     }
 

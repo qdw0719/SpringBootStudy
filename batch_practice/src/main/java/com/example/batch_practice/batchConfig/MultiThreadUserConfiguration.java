@@ -1,5 +1,6 @@
 package com.example.batch_practice.batchConfig;
 
+import com.example.batch_practice.execution.JobParametersDecide;
 import com.example.batch_practice.listener.LevelSetJobExecutionListener;
 import com.example.batch_practice.model.OrderStatistics;
 import com.example.batch_practice.model.User;
@@ -7,6 +8,7 @@ import com.example.batch_practice.repository.UserRepository;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
+import org.springframework.batch.core.configuration.annotation.JobScope;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.item.ItemProcessor;
@@ -21,6 +23,7 @@ import org.springframework.batch.item.file.FlatFileItemWriter;
 import org.springframework.batch.item.file.builder.FlatFileItemWriterBuilder;
 import org.springframework.batch.item.file.transform.BeanWrapperFieldExtractor;
 import org.springframework.batch.item.file.transform.DelimitedLineAggregator;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
@@ -46,8 +49,6 @@ public class MultiThreadUserConfiguration {
     private final DataSource dataSource;
     private final TaskExecutor taskExecutor;
 
-    private String currentDate = "2023-08";
-
     public MultiThreadUserConfiguration(JobBuilderFactory jobBuilderFactory,
                                         StepBuilderFactory stepBuilderFactory,
                                         EntityManagerFactory entityManagerFactory,
@@ -66,8 +67,11 @@ public class MultiThreadUserConfiguration {
                 .incrementer(new RunIdIncrementer())
                 .start(this.userStep())
                 .next(this.userLevelSettingStep())
-                .next(this.orderStatisticsStep())
                 .listener(new LevelSetJobExecutionListener(this.userRepository))
+                .next(new JobParametersDecide("date"))
+                .on(JobParametersDecide.CONTINUE.getName())
+                .to(this.orderStatisticsStep(null))
+                .build()
                 .build();
     }
 
@@ -91,13 +95,12 @@ public class MultiThreadUserConfiguration {
     }
 
     @Bean(JOB_NAME + "_orderStatisticsStep")
-//    @JobScope
-//    public Step orderStatisticsStep(@Value("#{jobParameters.date}") String date) throws Exception {
-    public Step orderStatisticsStep() throws Exception {
+    @JobScope
+    public Step orderStatisticsStep(@Value("#{jobParameters[date]}") String date) throws Exception {
         return this.stepBuilderFactory.get("orderStatisticsStep")
                 .<OrderStatistics, OrderStatistics>chunk(CHUNK_SIZE)
-                .reader(orderStatisticsItemReader(this.currentDate))
-                .writer(orderStatisticsItemWriter(this.currentDate))
+                .reader(orderStatisticsItemReader(date))
+                .writer(orderStatisticsItemWriter(date))
                 .build();
     }
 

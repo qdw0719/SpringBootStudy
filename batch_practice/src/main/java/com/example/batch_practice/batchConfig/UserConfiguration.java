@@ -47,8 +47,6 @@ public class UserConfiguration {
     private final UserRepository userRepository;
     private final DataSource dataSource;
 
-    private String currentDate = "2023-01";
-
     public UserConfiguration(JobBuilderFactory jobBuilderFactory,
                              StepBuilderFactory stepBuilderFactory,
                              EntityManagerFactory entityManagerFactory,
@@ -66,8 +64,11 @@ public class UserConfiguration {
                 .incrementer(new RunIdIncrementer())
                 .start(this.userStep())
                 .next(this.userLevelSettingStep())
-                .next(this.orderStatisticsStep())
                 .listener(new LevelSetJobExecutionListener(this.userRepository))
+                .next(new JobParametersDecide("date"))
+                .on(JobParametersDecide.CONTINUE.getName())
+                .to(this.orderStatisticsStep(null))
+                .build()
                 .build();
     }
 
@@ -89,13 +90,12 @@ public class UserConfiguration {
     }
 
     @Bean(JOB_NAME + "_orderStatisticsStep")
-//    @JobScope
-//    public Step orderStatisticsStep(@Value("#{jobParameters.date}") String date) throws Exception {
-    public Step orderStatisticsStep() throws Exception {
+    @JobScope
+    public Step orderStatisticsStep(@Value("#{jobParameters[date]}") String date) throws Exception {
         return this.stepBuilderFactory.get("orderStatisticsStep")
                 .<OrderStatistics, OrderStatistics>chunk(CHUNK_SIZE)
-                .reader(orderStatisticsItemReader(this.currentDate))
-                .writer(orderStatisticsItemWriter(this.currentDate))
+                .reader(orderStatisticsItemReader(date))
+                .writer(orderStatisticsItemWriter(date))
                 .build();
     }
 
