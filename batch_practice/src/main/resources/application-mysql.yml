@@ -8,6 +8,6 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
 batch:
   initialize-schema: never

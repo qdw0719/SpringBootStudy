@@ -3,7 +3,7 @@ server:
 
 spring:
   jpa:
-    show-sql: true
+    show-sql: false
   batch:
     job.names: ${job.name:NONE}
   datasource:
