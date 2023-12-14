@@ -11,7 +11,7 @@
  3. 등급 기준에 맞게 user별 등급 부여<br />
  4. Orders 테이블 생성
  5. date정보는 jobParameters 사용
-    - arguments에 --targetDate=2023-12 추가
+    - arguments에 -date=2023-12 추가
     - date파라미터가 없을 때 step실행 x
  6. 주문 집계내용은 csv파일로 생성
 
