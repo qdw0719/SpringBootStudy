@@ -1,16 +1,18 @@
 package com.example.batch_practice.batchConfig;
 
-import com.example.batch_practice.execution.JobParametersDecide;
 import com.example.batch_practice.listener.LevelSetJobExecutionListener;
 import com.example.batch_practice.model.OrderStatistics;
 import com.example.batch_practice.model.User;
+import com.example.batch_practice.partitioner.UserLevelSettingPartitioner;
 import com.example.batch_practice.repository.UserRepository;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
-import org.springframework.batch.core.configuration.annotation.JobScope;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
+import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
+import org.springframework.batch.core.partition.PartitionHandler;
+import org.springframework.batch.core.partition.support.TaskExecutorPartitionHandler;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
@@ -27,6 +29,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.task.TaskExecutor;
 
 import javax.persistence.EntityManagerFactory;
 import javax.sql.DataSource;
@@ -37,8 +40,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Configuration
-public class UserConfiguration {
-    private final String JOB_NAME = "userJob";
+public class PartitionUserConfiguration {
+    private final String JOB_NAME = "partitionThreadUserJob";
     private final int CHUNK_SIZE = 1000;
 
     private final JobBuilderFactory jobBuilderFactory;
@@ -46,18 +49,20 @@ public class UserConfiguration {
     private final EntityManagerFactory entityManagerFactory;
     private final UserRepository userRepository;
     private final DataSource dataSource;
+    private final TaskExecutor taskExecutor;
 
-    private String currentDate = "2023-01";
+    private String currentDate = "2023-07";
 
-    public UserConfiguration(JobBuilderFactory jobBuilderFactory,
-                             StepBuilderFactory stepBuilderFactory,
-                             EntityManagerFactory entityManagerFactory,
-                             UserRepository userRepository, DataSource dataSource) {
+    public PartitionUserConfiguration(JobBuilderFactory jobBuilderFactory,
+                                      StepBuilderFactory stepBuilderFactory,
+                                      EntityManagerFactory entityManagerFactory,
+                                      UserRepository userRepository, DataSource dataSource, TaskExecutor taskExecutor) {
         this.jobBuilderFactory = jobBuilderFactory;
         this.stepBuilderFactory = stepBuilderFactory;
         this.entityManagerFactory = entityManagerFactory;
         this.userRepository = userRepository;
         this.dataSource = dataSource;
+        this.taskExecutor = taskExecutor;
     }
 
     @Bean(JOB_NAME)
@@ -65,7 +70,7 @@ public class UserConfiguration {
         return this.jobBuilderFactory.get(JOB_NAME)
                 .incrementer(new RunIdIncrementer())
                 .start(this.userStep())
-                .next(this.userLevelSettingStep())
+                .next(this.userLevelSettingManagerStep())
                 .next(this.orderStatisticsStep())
                 .listener(new LevelSetJobExecutionListener(this.userRepository))
                 .build();
@@ -82,9 +87,20 @@ public class UserConfiguration {
     public Step userLevelSettingStep() throws Exception {
         return this.stepBuilderFactory.get("userLevelSettingStep")
                 .<User, User>chunk(CHUNK_SIZE)
-                .reader(this.itemReader())
+                .reader(this.itemReader(null, null))
                 .processor(this.itemProcessor())
                 .writer(this.itemWriter())
+                .taskExecutor(taskExecutor)
+                .throttleLimit(8)
+                .build();
+    }
+
+    @Bean(JOB_NAME + "_userLevelSettingStep.manager")
+    public Step userLevelSettingManagerStep() throws Exception {
+        return this.stepBuilderFactory.get(JOB_NAME + "_userLevelSettingStep.manager")
+                .partitioner(JOB_NAME + "_userLevelSettingStep", new UserLevelSettingPartitioner(userRepository))
+                .step(userLevelSettingStep())
+                .partitionHandler(taskExecutorPartitionHandler())
                 .build();
     }
 
@@ -99,15 +115,33 @@ public class UserConfiguration {
                 .build();
     }
 
-    private ItemReader<User> itemReader() throws Exception {
+    @Bean
+    @StepScope
+    JpaPagingItemReader<User> itemReader(@Value("#{stepExecutionContext[minId]}") Long minId,
+                                        @Value("#{stepExecutionContext[maxId]}") Long maxId) throws Exception {
+
+        Map<String, Object> parameter = new HashMap<>();
+        parameter.put("minId", minId);
+        parameter.put("maxId", maxId);
+
         JpaPagingItemReader<User> itemReader = new JpaPagingItemReaderBuilder<User>()
-                .queryString("select u from User u")
+                .queryString("select u from User u where u.id between :minId and :maxId")
+                .parameterValues(parameter)
                 .entityManagerFactory(this.entityManagerFactory)
                 .pageSize(CHUNK_SIZE)
                 .name("userItemReader")
                 .build();
         itemReader.afterPropertiesSet();
         return itemReader;
+    }
+
+    @Bean(JOB_NAME + "_taskExecutionPartitionHandler")
+    PartitionHandler taskExecutorPartitionHandler() throws Exception {
+        TaskExecutorPartitionHandler handler = new TaskExecutorPartitionHandler();
+        handler.setStep(userLevelSettingStep());
+        handler.setTaskExecutor(taskExecutor);
+        handler.setGridSize(8);
+        return handler;
     }
 
     private ItemProcessor<User, User> itemProcessor() {

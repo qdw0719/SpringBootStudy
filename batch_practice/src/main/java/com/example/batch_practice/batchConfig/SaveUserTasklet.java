@@ -48,27 +48,26 @@ public class SaveUserTasklet implements Tasklet {
         String[] names = {"Park", "Kim", "Choi", "Lee", "Hwang"};
         int[] amount = {1000, 200000, 300000, 500000};
 
+        int yearI = 2023;
+        
         List<User> users = new ArrayList<>();
-        for (int yearI = 2020, lastY = 2023; yearI <= lastY; yearI++) {
-            for (int monthI = 1, lastM = 12; monthI <= lastM; monthI++) {
-                LocalDate startDate = LocalDate.of(yearI, monthI, 1);
-                LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
-                for (LocalDate date = startDate; date.isBefore(endDate.plusDays(1)); date = date.plusDays(1)) {
-                    for (int i = 0; i < SIZE; i++) {
-                        System.out.println(yearI + "-" + monthI + "-" + date.getDayOfMonth());
-                        users.add(User.builder()
-                                .orders(Collections.singletonList(
-                                        Orders.builder()
-                                                .amount(amount[randomAmountIndex()])
-                                                .createdDate(LocalDate.of(yearI, monthI, date.getDayOfMonth()))
-                                                .itemName("item" + i)
-                                                .build()
-                                ))
-                                .userName(names[randomNameIndex()])
-                                .level(Level.NORMAL)
-                                .createdDate(LocalDateTime.now())
-                                .build());
-                    }
+        for (int monthI = 1, lastM = 12; monthI <= lastM; monthI++) {
+            LocalDate startDate = LocalDate.of(yearI, monthI, 1);
+            LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
+            for (LocalDate date = startDate; date.isBefore(endDate.plusDays(1)); date = date.plusDays(1)) {
+                for (int i = 0; i < SIZE; i++) {
+                    users.add(User.builder()
+                            .orders(Collections.singletonList(
+                                    Orders.builder()
+                                            .amount(amount[randomAmountIndex()])
+                                            .createdDate(LocalDate.of(yearI, monthI, date.getDayOfMonth()))
+                                            .itemName("item" + i)
+                                            .build()
+                            ))
+                            .userName(names[randomNameIndex()])
+                            .level(Level.NORMAL)
+                            .createdDate(LocalDateTime.now())
+                            .build());
                 }
             }
         }

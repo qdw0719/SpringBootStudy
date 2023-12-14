@@ -1,6 +1,5 @@
 package com.example.batch_practice.batchConfig;
 
-import com.example.batch_practice.execution.JobParametersDecide;
 import com.example.batch_practice.listener.LevelSetJobExecutionListener;
 import com.example.batch_practice.model.OrderStatistics;
 import com.example.batch_practice.model.User;
@@ -8,7 +7,6 @@ import com.example.batch_practice.repository.UserRepository;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
-import org.springframework.batch.core.configuration.annotation.JobScope;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.item.ItemProcessor;
@@ -23,10 +21,10 @@ import org.springframework.batch.item.file.FlatFileItemWriter;
 import org.springframework.batch.item.file.builder.FlatFileItemWriterBuilder;
 import org.springframework.batch.item.file.transform.BeanWrapperFieldExtractor;
 import org.springframework.batch.item.file.transform.DelimitedLineAggregator;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.task.TaskExecutor;
 
 import javax.persistence.EntityManagerFactory;
 import javax.sql.DataSource;
@@ -37,27 +35,29 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Configuration
-public class UserConfiguration {
-    private final String JOB_NAME = "userJob";
-    private final int CHUNK_SIZE = 1000;
+public class MultiThreadUserConfiguration {
+    private final String JOB_NAME = "multiSThreadUserJob";
+    private final int CHUNK_SIZE = 10000;
 
     private final JobBuilderFactory jobBuilderFactory;
     private final StepBuilderFactory stepBuilderFactory;
     private final EntityManagerFactory entityManagerFactory;
     private final UserRepository userRepository;
     private final DataSource dataSource;
+    private final TaskExecutor taskExecutor;
 
-    private String currentDate = "2023-01";
+    private String currentDate = "2023-08";
 
-    public UserConfiguration(JobBuilderFactory jobBuilderFactory,
-                             StepBuilderFactory stepBuilderFactory,
-                             EntityManagerFactory entityManagerFactory,
-                             UserRepository userRepository, DataSource dataSource) {
+    public MultiThreadUserConfiguration(JobBuilderFactory jobBuilderFactory,
+                                        StepBuilderFactory stepBuilderFactory,
+                                        EntityManagerFactory entityManagerFactory,
+                                        UserRepository userRepository, DataSource dataSource, TaskExecutor taskExecutor) {
         this.jobBuilderFactory = jobBuilderFactory;
         this.stepBuilderFactory = stepBuilderFactory;
         this.entityManagerFactory = entityManagerFactory;
         this.userRepository = userRepository;
         this.dataSource = dataSource;
+        this.taskExecutor = taskExecutor;
     }
 
     @Bean(JOB_NAME)
@@ -85,6 +85,8 @@ public class UserConfiguration {
                 .reader(this.itemReader())
                 .processor(this.itemProcessor())
                 .writer(this.itemWriter())
+                .taskExecutor(taskExecutor)
+                .throttleLimit(8)
                 .build();
     }
 

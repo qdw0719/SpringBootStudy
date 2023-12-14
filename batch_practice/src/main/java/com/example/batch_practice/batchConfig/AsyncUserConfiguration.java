@@ -1,6 +1,5 @@
 package com.example.batch_practice.batchConfig;
 
-import com.example.batch_practice.execution.JobParametersDecide;
 import com.example.batch_practice.listener.LevelSetJobExecutionListener;
 import com.example.batch_practice.model.OrderStatistics;
 import com.example.batch_practice.model.User;
@@ -8,9 +7,10 @@ import com.example.batch_practice.repository.UserRepository;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
-import org.springframework.batch.core.configuration.annotation.JobScope;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
+import org.springframework.batch.integration.async.AsyncItemProcessor;
+import org.springframework.batch.integration.async.AsyncItemWriter;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
@@ -23,10 +23,10 @@ import org.springframework.batch.item.file.FlatFileItemWriter;
 import org.springframework.batch.item.file.builder.FlatFileItemWriterBuilder;
 import org.springframework.batch.item.file.transform.BeanWrapperFieldExtractor;
 import org.springframework.batch.item.file.transform.DelimitedLineAggregator;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.task.TaskExecutor;
 
 import javax.persistence.EntityManagerFactory;
 import javax.sql.DataSource;
@@ -35,10 +35,11 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Future;
 
 @Configuration
-public class UserConfiguration {
-    private final String JOB_NAME = "userJob";
+public class AsyncUserConfiguration {
+    private final String JOB_NAME = "asyncUserJob";
     private final int CHUNK_SIZE = 1000;
 
     private final JobBuilderFactory jobBuilderFactory;
@@ -46,18 +47,20 @@ public class UserConfiguration {
     private final EntityManagerFactory entityManagerFactory;
     private final UserRepository userRepository;
     private final DataSource dataSource;
+    private final TaskExecutor taskExecutor;
 
-    private String currentDate = "2023-01";
+    private String currentDate = "2023-02";
 
-    public UserConfiguration(JobBuilderFactory jobBuilderFactory,
-                             StepBuilderFactory stepBuilderFactory,
-                             EntityManagerFactory entityManagerFactory,
-                             UserRepository userRepository, DataSource dataSource) {
+    public AsyncUserConfiguration(JobBuilderFactory jobBuilderFactory,
+                                  StepBuilderFactory stepBuilderFactory,
+                                  EntityManagerFactory entityManagerFactory,
+                                  UserRepository userRepository, DataSource dataSource, TaskExecutor taskExecutor) {
         this.jobBuilderFactory = jobBuilderFactory;
         this.stepBuilderFactory = stepBuilderFactory;
         this.entityManagerFactory = entityManagerFactory;
         this.userRepository = userRepository;
         this.dataSource = dataSource;
+        this.taskExecutor = taskExecutor;
     }
 
     @Bean(JOB_NAME)
@@ -81,7 +84,7 @@ public class UserConfiguration {
     @Bean(JOB_NAME + "_userLevelSettingStep")
     public Step userLevelSettingStep() throws Exception {
         return this.stepBuilderFactory.get("userLevelSettingStep")
-                .<User, User>chunk(CHUNK_SIZE)
+                .<User, Future<User>>chunk(CHUNK_SIZE)
                 .reader(this.itemReader())
                 .processor(this.itemProcessor())
                 .writer(this.itemWriter())
@@ -110,23 +113,32 @@ public class UserConfiguration {
         return itemReader;
     }
 
-    private ItemProcessor<User, User> itemProcessor() {
-        return user -> {
+    private AsyncItemProcessor<User, User> itemProcessor() {
+        ItemProcessor<User, User> itemProcessor = user -> {
             if (user.availableLevelSet()) {
                 return user;
             }
             return null;
         };
+
+        AsyncItemProcessor<User, User> asyncItemProcessor = new AsyncItemProcessor<>();
+        asyncItemProcessor.setDelegate(itemProcessor);
+        asyncItemProcessor.setTaskExecutor(this.taskExecutor);
+        return asyncItemProcessor;
     }
 
-    private ItemWriter<User> itemWriter() {
-        return users -> {
+    private AsyncItemWriter<User> itemWriter() {
+        ItemWriter<User> itemWriter = users -> {
             users.forEach(
                     user -> {
                         user.levelSet();
                         userRepository.save(user);
                     });
         };
+
+        AsyncItemWriter<User> asyncItemWriter = new AsyncItemWriter<>();
+        asyncItemWriter.setDelegate(itemWriter);
+        return asyncItemWriter;
     }
 
     private ItemReader<OrderStatistics> orderStatisticsItemReader(String date) throws Exception {
